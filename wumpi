@@ -1,0 +1,121 @@
+import java.util.*;
+
+public class WumpusTransfer {
+
+    // The cache to store the Wumpus data
+    private Map<WumpType, Set<Wumpus>> cache = new HashMap<>();
+
+    // Method to transfer data to the SQLite server
+    public void transferDataToSQLite(Map<WumpType, Set<Wumpus>> wumpusData) {
+        // Step 1: Separate data into three collections
+        Map<WumpType, Set<Wumpus>> createData = new HashMap<>();
+        Map<WumpType, Set<Wumpus>> updateData = new HashMap<>();
+        Map<WumpType, Set<Wumpus>> deleteData = new HashMap<>();
+
+        for (Map.Entry<WumpType, Set<Wumpus>> entry : wumpusData.entrySet()) {
+            WumpType type = entry.getKey();
+            Set<Wumpus> wumpusSet = entry.getValue();
+
+            Set<Wumpus> cachedWumpusSet = cache.getOrDefault(type, new HashSet<>());
+            Set<Wumpus> createSet = new HashSet<>();
+            Set<Wumpus> updateSet = new HashSet<>();
+            Set<Wumpus> deleteSet = new HashSet<>();
+
+            for (Wumpus wumpus : wumpusSet) {
+                if (cachedWumpusSet.contains(wumpus)) {
+                    updateSet.add(wumpus);
+                } else {
+                    createSet.add(wumpus);
+                }
+            }
+
+            // Find wumpus in the cache that are not present in the current data (for delete operation)
+            for (Wumpus cachedWumpus : cachedWumpusSet) {
+                if (!wumpusSet.contains(cachedWumpus)) {
+                    deleteSet.add(cachedWumpus);
+                }
+            }
+
+            if (!createSet.isEmpty()) {
+                createData.put(type, createSet);
+            }
+            if (!updateSet.isEmpty()) {
+                updateData.put(type, updateSet);
+            }
+            if (!deleteSet.isEmpty()) {
+                deleteData.put(type, deleteSet);
+            }
+
+            // Update the cache for this WumpType with the current data
+            cache.put(type, wumpusSet);
+        }
+
+        // Step 2: Create batch operations and execute them
+        executeBatchOperations(createData, WumpOperation.CREATE);
+        executeBatchOperations(updateData, WumpOperation.UPDATE);
+        executeBatchOperations(deleteData, WumpOperation.DELETE);
+    }
+
+    // Method to create batch operations and execute them
+    private void executeBatchOperations(Map<WumpType, Set<Wumpus>> data, WumpOperation operation) {
+        if (data.isEmpty()) {
+            return;
+        }
+
+        BatchOperation batchOperation = new BatchOperation();
+        for (Map.Entry<WumpType, Set<Wumpus>> entry : data.entrySet()) {
+            WumpType type = entry.getKey();
+            Set<Wumpus> wumpuses = entry.getValue();
+
+            for (Wumpus wumpus : wumpuses) {
+                batchOperation.addBatch(type, wumpus, operation);
+            }
+        }
+
+        // Now execute the batch operation
+        switch (operation) {
+            case CREATE:
+                batchOperation.executeCreateBatch();
+                break;
+            case UPDATE:
+                batchOperation.executeUpdateBatch();
+                break;
+            case DELETE:
+                batchOperation.executeDeleteBatch();
+                break;
+        }
+    }
+
+    // Other methods as before...
+
+    private class BatchOperation {
+        // Other fields and methods as before...
+
+        public void executeCreateBatch() {
+            if (createBatch.isEmpty()) {
+                return;
+            }
+
+            String sql = "INSERT INTO wumpus_table (id, type, other_column) VALUES (?, ?, ?)";
+            try (Connection connection = DriverManager.getConnection("jdbc:sqlite:wumpus.db");
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+
+                for (Wumpus wumpus : createBatch) {
+                    statement.setInt(1, wumpus.getId());
+                    statement.setString(2, wumpus.getType().toString());
+                    statement.setString(3, wumpus.getOtherColumn());
+                    statement.addBatch();
+                }
+
+                int[] result = statement.executeBatch();
+                System.out.println("Inserted " + result.length + " Wumpuses.");
+            } catch (SQLException e) {
+                e.printStackTrace();
+                // Handle the exception appropriately
+            }
+        }
+    }
+}
+
+
+
